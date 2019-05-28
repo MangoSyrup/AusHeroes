@@ -1,0 +1,429 @@
+import AusHeroes.knockbackListener;
+import AusHeroes.commandListener;
+import AusHeroes.eventListener;
+
+int main() {
+  main();
+}
+
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_dx9.h>
+#include <imgui/imgui_impl_win32.h>
+#include <render/Device3D9.hpp>
+#include <render/Surface3D9.hpp>
+using namespace render;
+
+//bool show_demo_window = true;
+//bool show_another_window = false;
+//ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+int windowstate = 0;
+bool enabled = false;
+
+void CustomImGUIStyle()
+{
+	ImGuiStyle& style = ImGui::GetStyle();
+
+	style.WindowPadding = ImVec2(14, 14);
+	style.FramePadding = ImVec2(8, 8);
+	style.ItemSpacing = ImVec2(8, 8);
+	style.ItemInnerSpacing = ImVec2(8, 8);
+
+	ImVec4* colors = style.Colors;
+	colors[ImGuiCol_FrameBg] = ImVec4(0.48f, 0.16f, 0.16f, 0.54f);
+	colors[ImGuiCol_FrameBgHovered] = ImVec4(0.98f, 0.26f, 0.26f, 0.40f);
+	colors[ImGuiCol_FrameBgActive] = ImVec4(0.98f, 0.26f, 0.26f, 0.67f);
+	colors[ImGuiCol_TitleBgActive] = ImVec4(0.48f, 0.16f, 0.16f, 1.00f);
+	colors[ImGuiCol_CheckMark] = ImVec4(0.26f, 0.98f, 0.39f, 1.00f);
+	colors[ImGuiCol_SliderGrab] = ImVec4(0.24f, 0.88f, 0.41f, 1.00f);
+	colors[ImGuiCol_SliderGrabActive] = ImVec4(0.47f, 0.98f, 0.26f, 1.00f);
+	colors[ImGuiCol_Button] = ImVec4(0.26f, 0.98f, 0.61f, 0.40f);
+	colors[ImGuiCol_ButtonHovered] = ImVec4(0.98f, 0.26f, 0.26f, 1.00f);
+	colors[ImGuiCol_ButtonActive] = ImVec4(0.98f, 0.06f, 0.06f, 1.00f);
+	colors[ImGuiCol_Header] = ImVec4(0.98f, 0.26f, 0.26f, 0.31f);
+	colors[ImGuiCol_HeaderHovered] = ImVec4(0.98f, 0.26f, 0.26f, 0.80f);
+	colors[ImGuiCol_HeaderActive] = ImVec4(0.98f, 0.26f, 0.26f, 1.00f);
+	colors[ImGuiCol_SeparatorHovered] = ImVec4(0.75f, 0.10f, 0.10f, 0.78f);
+	colors[ImGuiCol_SeparatorActive] = ImVec4(0.75f, 0.10f, 0.10f, 1.00f);
+	colors[ImGuiCol_ResizeGrip] = ImVec4(0.98f, 0.26f, 0.26f, 0.25f);
+	colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.98f, 0.26f, 0.26f, 0.67f);
+	colors[ImGuiCol_ResizeGripActive] = ImVec4(0.98f, 0.26f, 0.26f, 0.95f);
+	colors[ImGuiCol_Tab] = ImVec4(0.58f, 0.18f, 0.18f, 0.86f);
+	colors[ImGuiCol_TabHovered] = ImVec4(0.98f, 0.26f, 0.26f, 0.80f);
+	colors[ImGuiCol_TabActive] = ImVec4(0.68f, 0.20f, 0.20f, 1.00f);
+	colors[ImGuiCol_TabUnfocused] = ImVec4(0.15f, 0.07f, 0.07f, 0.97f);
+	colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.42f, 0.14f, 0.14f, 1.00f);
+	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.98f, 0.26f, 0.26f, 0.35f);
+	colors[ImGuiCol_NavHighlight] = ImVec4(0.98f, 0.26f, 0.26f, 1.00f);
+}
+
+void ChangeClickability(bool canclick, HWND ownd)
+{
+	long style = GetWindowLong(
+		ownd, GWL_EXSTYLE);
+	if (canclick) {
+		style &= ~WS_EX_LAYERED;
+		SetWindowLong(ownd,
+			GWL_EXSTYLE, style);
+		SetForegroundWindow(ownd);
+		windowstate = 1;
+	}
+	else {
+		style |= WS_EX_LAYERED;
+		SetWindowLong(ownd,
+			GWL_EXSTYLE, style);
+		windowstate = 0;
+	}
+}
+
+void AimTab()
+{
+	static const char* Keys[] =
+	{
+		"Left Button",
+		"Right Button",
+		"Middle Mouse",
+		"Mouse 4",
+		"Mouse 5"
+	};
+	static const char* Bones[] =
+	{
+		"Head",
+		"Chest"
+	};
+
+	static bool Enabled = false;
+
+	static int Key = 0;
+	static bool OffKeyEnable = false;
+	static int OffKey = 0;
+	static float Fov = 15.f;
+	static float Distance = 500.f;
+	static bool VisibilityCheck = false;
+
+	static int Bone = 0;
+	static bool Random = false;
+	static bool BodyAim = false;
+	static int BodyAimKey = 0;
+	static bool VelocityPrediction = false;
+	static bool AutoZeroing = false;
+
+	ImGui::Checkbox("Enabled", &Enabled);
+
+	ImGui::Separator();
+
+	ImGui::Columns(2, "Configuration", true);
+
+	ImGui::Combo("Aim Key", &Key, Keys, ARRAYSIZE(Keys));
+	ImGui::Checkbox("Aim Off Key Enabled", &OffKeyEnable);
+	ImGui::Combo("Aim Off Key", &OffKey, Keys, ARRAYSIZE(Keys));
+	ImGui::SliderFloat("Aimbot FOV", &Fov, 1.f, 180.f);
+	ImGui::SliderFloat("Aimbot Distance", &Distance, 1.f, 1000.f);
+	ImGui::Checkbox("Visibility Check", &VisibilityCheck);
+
+	ImGui::NextColumn();
+
+	ImGui::Combo("Aim Bone", &Bone, Bones, ARRAYSIZE(Bones));
+	ImGui::Checkbox("Randomize Bone", &Random);
+	ImGui::Checkbox("Body Aim", &BodyAim);
+	ImGui::Combo("Body Aim Key", &BodyAimKey, Keys, ARRAYSIZE(Keys));
+	ImGui::Checkbox("Velocity Prediction", &VelocityPrediction);
+	ImGui::Checkbox("Auto Weapon Zeroing", &AutoZeroing);
+
+	ImGui::Columns(1);
+
+	ImGui::Separator();
+}
+
+void VisualsTab()
+{
+	static const char* BoxTypes[] =
+	{
+		"Cornered",
+		"2D",
+		"3D"
+	};
+
+	static bool Enabled = false;
+
+	static bool PlayerEnabled = false;
+	static bool PlayerBox = false;
+	static int PlayerBoxType = 0;
+	static bool PlayerName = false;
+	static bool PlayerHealth = false;
+	static bool PlayerDistance = false;
+	static bool PlayerLine = false;
+	static bool PlayerTeam = false;
+
+	static bool VehicleEnabled = false;
+	static bool VehicleBox = false;
+	static int VehicleBoxType = 0;
+	static bool VehicleName = false;
+	static bool VehicleHealth = false;
+	static bool VehicleDistance = false;
+	static bool VehicleLine = false;
+
+	static bool ItemEnabled = false;
+	static bool ItemLevel3 = false;
+	static bool ItemLevel2 = false;
+	static bool ItemGuns = false;
+	static bool ItemAttachments = false;
+	static bool ItemAmmo = false;
+	static bool ItemHealth = false;
+	static bool ItemALL = false;
+
+	ImGui::Checkbox("Enabled", &Enabled);
+
+	ImGui::Separator();
+
+	ImGui::Columns(3, "Configuration", true);
+
+	ImGui::Checkbox("Player ESP Enabled", &PlayerEnabled); ImGui::NextColumn();
+	ImGui::Checkbox("Vehicle ESP Enabled", &VehicleEnabled); ImGui::NextColumn();
+	ImGui::Checkbox("Item ESP Enabled", &ItemEnabled);
+
+	ImGui::Separator();
+
+	ImGui::NextColumn();
+
+	ImGui::Checkbox("Player Box ESP", &PlayerBox);
+	ImGui::Combo("Type", &PlayerBoxType, BoxTypes, ARRAYSIZE(BoxTypes));
+	ImGui::Checkbox("Player Name ESP", &PlayerName);
+	ImGui::Checkbox("Player Health ESP", &PlayerHealth);
+	ImGui::Checkbox("Player Distance ESP", &PlayerDistance);
+	ImGui::Checkbox("Player Line ESP", &PlayerLine);
+	ImGui::Checkbox("Player Team ESP", &PlayerTeam);
+
+	ImGui::NextColumn();
+
+	ImGui::Checkbox("Vehicle Box ESP", &VehicleBox);
+	ImGui::Combo("Box Type", &VehicleBoxType, BoxTypes, ARRAYSIZE(BoxTypes));
+	ImGui::Checkbox("Vehicle Name ESP", &VehicleName);
+	ImGui::Checkbox("Vehicle Health ESP", &VehicleHealth);
+	ImGui::Checkbox("Vehicle Distance ESP", &VehicleDistance);
+	ImGui::Checkbox("Vehicle Line ESP", &VehicleLine);
+
+	ImGui::NextColumn();
+	
+	ImGui::Checkbox("Level 3 Items", &ItemLevel3);
+	ImGui::Checkbox("Level 2 Items", &ItemLevel2);
+	ImGui::Checkbox("Guns", &ItemGuns);
+	ImGui::Checkbox("Attachments", &ItemAttachments);
+	ImGui::Checkbox("Ammo", &ItemAmmo);
+	ImGui::Checkbox("Health Items", &ItemHealth);
+	ImGui::Checkbox("All Items", &ItemALL);
+
+	ImGui::Columns(1);
+
+	ImGui::Separator();
+}
+
+void MiscTab()
+{
+	static const char* Keys[] =
+	{
+		"Left Button",
+		"Right Button",
+		"Middle Mouse",
+		"Mouse 4",
+		"Mouse 5"
+	};
+
+	static bool Enabled = false;
+
+	static bool WeaponModifiersEnabled = false;
+	static bool NoRecoil = false;
+	static bool NoSpread = false;
+	static bool NoSway = false;
+	static bool NoBreath = false;
+	static bool InstantHit = false;
+	static bool MagicBullets = false;
+
+	static bool OthersEnabled = false;
+	static bool Teleport = false;
+	static int TeleportKey = 0;
+	static bool FastRun = false;
+	static int FastRunKey = 0;
+	static bool RedZonePrediction = false;
+	static bool SpectatorWarning = false;
+
+	ImGui::Checkbox("Enabled", &Enabled);
+
+	ImGui::Separator();
+
+	ImGui::Columns(2, "Configuration", true);
+
+	ImGui::Checkbox("Weapon Modifiers Enabled", &WeaponModifiersEnabled);
+
+	ImGui::NextColumn();
+
+	ImGui::Checkbox("Others Enabled", &OthersEnabled);
+
+	ImGui::Separator();
+
+	ImGui::NextColumn();
+
+	ImGui::Checkbox("No Recoil", &NoRecoil);
+	ImGui::Checkbox("No Spread", &NoSpread);
+	ImGui::Checkbox("No Sway", &NoSway);
+	ImGui::Checkbox("No Breath", &NoBreath);
+	ImGui::Checkbox("Instant Hit", &InstantHit);
+	ImGui::Checkbox("Magic Bullets", &MagicBullets);
+
+	ImGui::NextColumn();
+
+	ImGui::Checkbox("Teleport", &Teleport);
+	ImGui::Combo("Teleport Key", &TeleportKey, Keys, ARRAYSIZE(Keys));
+	ImGui::Checkbox("Fast Run", &FastRun);
+	ImGui::Combo("Fast Run Key", &FastRunKey, Keys, ARRAYSIZE(Keys));
+	ImGui::Checkbox("Red Zone Prediction", &RedZonePrediction);
+	ImGui::Checkbox("Spectator Warning", &SpectatorWarning);
+
+	ImGui::Separator();
+
+	ImGui::Columns(1);
+}
+
+Device3D9::~Device3D9()
+{
+    /// Call to a virtual function inside a destructor will be statically resolved
+    DTOR_EXECUTE_VIRTUAL( shutdown );
+}
+
+bool Device3D9::create( const std::string& target_window_title )
+{
+    if( !Overlay::create( target_window_title ) ) {
+        return false;
+    }
+    if( FAILED( Direct3DCreate9Ex( D3D_SDK_VERSION, &m_Direct3D9Ex ) ) ) {
+        return false;
+    }
+    
+    D3DPRESENT_PARAMETERS params;
+    ZeroMemory( &params, sizeof( D3DPRESENT_PARAMETERS ) );
+
+    params.Windowed               = TRUE;
+    params.SwapEffect             = D3DSWAPEFFECT_DISCARD;
+    params.BackBufferFormat       = D3DFMT_A8R8G8B8;
+    params.EnableAutoDepthStencil = TRUE;
+    params.AutoDepthStencilFormat = D3DFMT_D16;
+    params.MultiSampleType        = D3DMULTISAMPLE_NONE;
+    params.PresentationInterval   = 0x80000000L;
+
+    DWORD mulit_sample_quality = 0;
+    if( SUCCEEDED( this->m_Direct3D9Ex->CheckDeviceMultiSampleType(
+        D3DADAPTER_DEFAULT,
+        D3DDEVTYPE_HAL,
+        D3DFMT_A8R8G8B8,
+        true,
+        D3DMULTISAMPLE_NONMASKABLE,
+        &mulit_sample_quality ) ) ) {
+        params.MultiSampleType    = D3DMULTISAMPLE_NONMASKABLE;
+        params.MultiSampleQuality = mulit_sample_quality - 1;
+    }
+    if( FAILED( m_Direct3D9Ex->CreateDeviceEx(
+        D3DADAPTER_DEFAULT,
+        D3DDEVTYPE_HAL,
+        m_WndOverlay,
+        D3DCREATE_HARDWARE_VERTEXPROCESSING,
+        &params,
+        nullptr,
+        &m_Direct3D9Device ) ) ) {
+        return false;
+    }
+
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+
+// Setup Dear ImGui style
+ImGui::StyleColorsDark();
+CustomImGUIStyle();
+//ImGui::StyleColorsClassic();
+
+// Setup Platform/Renderer bindings
+ImGui_ImplWin32_Init(m_WndOverlay);
+ImGui_ImplDX9_Init(m_Direct3D9Device);
+
+if (FAILED(D3DXCreateSprite(m_Direct3D9Device, &m_Direct3DXSprite))) {
+	return false;
+}
+
+m_Surface = std::make_unique<Surface3D9>(m_Direct3DXSprite);
+return m_Surface->initialize(m_Direct3D9Device);
+}
+
+bool Device3D9::render()
+{
+	/// handle window messages
+	if (!Overlay::render()) {
+		return false;
+	}
+
+	if (FAILED(m_Direct3D9Device->Clear(
+		0,
+		nullptr,
+		D3DCLEAR_TARGET,
+		0x00000000,
+		1.f,
+		0)
+	)) {
+		return false;
+	}
+
+	/// start the surface scene only when the target window
+	/// is in foreground
+	if ( /*in_foreground()*/true) {
+
+		if (GetAsyncKeyState(VK_INSERT) & 1) enabled = !enabled;
+
+		if (enabled)
+		{
+			// Start the Dear ImGui frame
+			ImGui_ImplDX9_NewFrame();
+			ImGui_ImplWin32_NewFrame();
+			ImGui::NewFrame();
+
+			if (windowstate != 1) //You might need to remove this check and call it every time to get keyboard input working. Mouse input works anyway.
+			{
+				ChangeClickability(true, m_WndOverlay);
+			}
+
+			//// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+			//if (show_demo_window)
+			//	ImGui::ShowDemoWindow(&show_demo_window);
+
+			//// 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
+			//{
+			//	static float f = 0.0f;
+			//	static int counter = 0;
+
+			//	ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+			//	ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+			//	ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+			//	ImGui::Checkbox("Another Window", &show_another_window);
+
+			//	ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f    
+			//	ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+
+			//	if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+			//		counter++;
+			//	ImGui::SameLine();
+			//	ImGui::Text("counter = %d", counter);
+
+			//	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			//	ImGui::End();
+			//}
+
+			//// 3. Show another simple window.
+			//if (show_another_window)
+			//{
+			//	ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+			//	ImGui::Text("Hello from another window!");
+			//	if (ImGui::Button("Close Me"))
+			//		show_another_window = false;
+			//	ImGui::End();
+			//}
